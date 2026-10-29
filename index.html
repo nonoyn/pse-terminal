@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Philippine Stock Exchange (PSE) Forecast Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            pse: {
+              dark: '#0b0f19',
+              card: '#111827',
+              border: '#1f2937',
+              accent: '#3b82f6',
+              orange: '#f97316',
+              bullish: '#10b981',
+              bearish: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Excel-style table gridlines */
+    .excel-table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .excel-table th, .excel-table td {
+      border-right: 1px solid #374151;
+      border-bottom: 1px solid #374151;
+    }
+    .excel-table tr:hover td {
+      background-color: rgba(30, 58, 138, 0.25);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#0b0f19] text-gray-100 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-gray-800 bg-[#111827]/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="h-10 w-10 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 font-black text-xl text-white">
+          🇵🇭
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              PSE Forecast Terminal
+              <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">Next-Day AI Engine</span>
+            </h1>
+          </div>
+          <p class="text-xs text-gray-400 hidden sm:block">Philippine Stock Exchange (PSE) Momentum Analytics & AI Budget Advisor</p>
+        </div>
+      </div>
+
+      <!-- Search & Symbol Input -->
+      <div class="flex items-center gap-2 max-w-sm w-full">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </div>
+          <input 
+            type="text" 
+            id="tickerInput" 
+            placeholder="Search PSE (e.g. ALI, BDO, SM)..." 
+            value="ALI"
+            class="w-full pl-9 pr-14 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase font-mono tracking-wider transition-all"
+            onkeydown="if(event.key === 'Enter') handleSearch()"
+          />
+          <button 
+            onclick="handleSearch()"
+            class="absolute inset-y-1 right-1 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold transition-colors flex items-center gap-1"
+          >
+            Go
+          </button>
+        </div>
+
+        <!-- Add/Remove Favorite Button -->
+        <button 
+          id="btnToggleFavorite" 
+          onclick="toggleCurrentFavorite()"
+          title="Toggle Favorite"
+          class="p-2.5 rounded-lg border border-gray-700 bg-gray-900 text-gray-400 hover:text-amber-400 hover:border-amber-400/50 transition-colors"
+        >
+          <i class="fa-regular fa-star text-base" id="starIcon"></i>
+        </button>
+
+        <!-- Refresh Button -->
+        <button 
+          id="btnRefreshData" 
+          onclick="triggerManualRefresh()"
+          title="Pull Fresh PSE Market Rates"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 active:scale-95 text-xs font-semibold font-mono transition-all shrink-0 cursor-pointer"
+        >
+          <i class="fa-solid fa-arrows-rotate text-xs" id="refreshIcon"></i>
+          <span id="refreshLabel" class="hidden sm:inline">Refresh</span>
+        </button>
+      </div>
+
+      <!-- Server / Port Status Indicator & Last Updated Badge -->
+      <div class="hidden lg:flex items-center gap-3 text-xs">
+        <div id="lastUpdatedBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900 border border-gray-800 text-gray-400 font-mono text-[11px]">
+          <i class="fa-regular fa-clock text-gray-500"></i>
+          <span>Updated: <span id="lastUpdatedTime" class="text-gray-300">Just now</span></span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Port: <span id="portLabel">8500</span> (Athoz Safe)</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- FAVORITES PILL BAR -->
+    <div class="border-t border-gray-800/60 bg-[#0d1322] px-4 sm:px-6 lg:px-8 py-2">
+      <div class="max-w-7xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mr-1 shrink-0">
+          <i class="fa-solid fa-bookmark text-amber-500 text-[10px]"></i> Favorites:
+        </span>
+        <div id="favoritesContainer" class="flex items-center gap-1.5 flex-nowrap">
+          <!-- Dynamically populated pills -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- LOADING SPINNER -->
+    <div id="loadingOverlay" class="hidden flex flex-col items-center justify-center py-20 space-y-4">
+      <div class="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
+      <p class="text-sm text-gray-400 font-mono">Querying PSE Market Feed & Calculating Indicators...</p>
+    </div>
+
+    <!-- ERROR BANNER -->
+    <div id="errorAlert" class="hidden p-4 rounded-xl bg-red-900/20 border border-red-700/50 text-red-200 text-sm flex items-start justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-red-400 text-lg"></i>
+        <div>
+          <span class="font-semibold" id="errorMessage">Error loading stock data</span>
+          <p class="text-xs text-red-300 mt-0.5">Please check the symbol or test with default favorites like ALI, BDO, SM, ICT, or TEL.</p>
+        </div>
+      </div>
+      <button onclick="dismissError()" class="text-red-400 hover:text-red-200"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- STOCK SUMMARY & FORECAST RIBBON -->
+    <div id="contentSection" class="space-y-6">
+
+      <!-- COMPANY & OVERVIEW BANNER -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gray-900/70 border border-gray-800 shadow-xl backdrop-blur">
+        <div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <h2 id="dispSymbol" class="text-3xl font-extrabold text-white tracking-tight mono">ALI.PS</h2>
+            <span id="dispName" class="text-lg text-gray-300 font-medium">Ayala Land, Inc.</span>
+            <span id="dispSector" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-400 border border-gray-700">Property</span>
+            <span id="dispDataSource" class="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-800">FEED: PSE</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-gray-400 mt-2 font-mono">
+            <span>Last Traded: <strong id="dispLastDate" class="text-gray-200">2026-10-23</strong></span>
+            <span>•</span>
+            <span>Forecast Target: <strong id="dispNextDate" class="text-amber-400">2026-10-26</strong></span>
+            <span>•</span>
+            <span>Currency: <strong>PHP (₱)</strong></span>
+          </div>
+        </div>
+
+        <!-- Current Market Price Box -->
+        <div class="flex items-end md:flex-col md:items-end justify-between border-t md:border-t-0 border-gray-800 pt-3 md:pt-0">
+          <div class="text-xs text-gray-400 uppercase tracking-wider mb-1">Latest Close</div>
+          <div class="flex items-baseline gap-2">
+            <span class="text-xs text-gray-400">₱</span>
+            <span id="dispClosePrice" class="text-3xl font-black text-white mono">30.42</span>
+          </div>
+          <div id="dispChangeBadge" class="text-xs font-semibold px-2.5 py-1 rounded-md flex items-center gap-1 font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 mt-1">
+            <i id="dispChangeIcon" class="fa-solid fa-arrow-trend-up"></i>
+            <span id="dispChangeVal">+0.35 (+1.13%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CORE FORECAST ENGINE METRIC CARDS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <!-- CARD 1: NEXT-DAY PROJECTED PRICE -->
+        <div class="relative overflow-hidden p-5 rounded-2xl bg-gradient-to-br from-amber-950/20 via-gray-900 to-gray-900 border border-amber-500/30 shadow-lg">
+          <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 rounded-full blur-xl pointer-events-none"></div>
+          <div class="flex items-center justify-between text-xs text-amber-400 font-semibold uppercase tracking-wider mb-1">
+            <span class="flex items-center gap-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Next-Day Projected Price
+            </span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">TARGET</span>
+          </div>
+          <div class="flex items-baseline gap-2 mt-2">
+            <span class="text-sm font-semibold text-amber-400">₱</span>
+            <span id="fcProjectedPrice" class="text-3xl font-black text-amber-400 mono tracking-tight">30.56</span>
+          </div>
+          <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-800/80 text-xs">
+            <span class="text-gray-400">Expected Drift:</span>
+            <span id="fcExpectedChange" class="font-mono font-semibold text-emerald-400">+₱0.14 (+0.46%)</span>
+          </div>
+        </div>
+
+        <!-- CARD 2: TREND DIRECTION -->
+        <div class="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-lg flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wider">
+            <span>Trend Momentum</span>
+            <i class="fa-solid fa-chart-line text-blue-400"></i>
+          </div>
+          <div class="my-2">
+            <div id="fcTrendBadge" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-base tracking-wide shadow-sm bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+              <i id="fcTrendIcon" class="fa-solid fa-arrow-trend-up"></i>
+              <span id="fcTrendText">Bullish</span>
+            </div>
+          </div>
+          <div class="text-xs text-gray-400 flex items-center justify-between pt-2 border-t border-gray-800/80 font-mono">
+            <span>EMA 9 vs 21:</span>
+            <span id="fcEmaAlignment" class="text-gray-200">Aligned Above</span>
+          </div>
+        </div>
+
+        <!-- CARD 3: CONFIDENCE RATING -->
+        <div class="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-lg flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wider">
+            <span>Forecast Confidence</span>
+            <i class="fa-solid fa-shield-halved text-purple-400"></i>
+          </div>
+          <div class="my-2">
+            <div class="flex items-baseline justify-between mb-1">
+              <span id="fcConfidenceVal" class="text-3xl font-extrabold text-white mono">78%</span>
+              <span id="fcConfidenceGrade" class="text-xs font-semibold text-purple-400">High Conviction</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+              <div id="fcConfidenceBar" class="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-700" style="width: 78%;"></div>
+            </div>
+          </div>
+          <div class="text-xs text-gray-400 flex items-center justify-between pt-2 border-t border-gray-800/80 font-mono">
+            <span>Indicator Agreement:</span>
+            <span class="text-emerald-400">4 / 4 Signals</span>
+          </div>
+        </div>
+
+        <!-- CARD 4: VOLATILITY CORRIDOR (± 0.75 * ATR) -->
+        <div class="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-lg flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wider">
+            <span>Expected Corridor</span>
+            <span class="text-[10px] text-gray-500 font-mono">± 0.75 × ATR</span>
+          </div>
+          <div class="my-1 space-y-1">
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="text-emerald-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-caret-up"></i> High Band:</span>
+              <span id="fcHighCorridor" class="text-sm font-bold text-gray-100">₱31.24</span>
+            </div>
+            <div class="flex items-center justify-between font-mono text-xs">
+              <span class="text-rose-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-caret-down"></i> Low Band:</span>
+              <span id="fcLowCorridor" class="text-sm font-bold text-gray-100">₱29.88</span>
+            </div>
+          </div>
+          <div class="text-xs text-gray-400 flex items-center justify-between pt-2 border-t border-gray-800/80 font-mono">
+            <span>14-day ATR:</span>
+            <span id="fcAtrVal" class="text-amber-400 font-semibold">0.91</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TECHNICAL INDICATORS QUICK STRIP -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-[#0e1626] border border-gray-800/90 text-xs font-mono">
+        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-900/60">
+          <span class="text-gray-400">9-Day EMA:</span>
+          <span id="indEma9" class="font-bold text-cyan-400">₱30.71</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-900/60">
+          <span class="text-gray-400">21-Day EMA:</span>
+          <span id="indEma21" class="font-bold text-indigo-400">₱30.35</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-900/60">
+          <span class="text-gray-400">14-Day RSI:</span>
+          <span id="indRsi" class="font-bold text-emerald-400">52.98 (Neutral)</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-900/60">
+          <span class="text-gray-400">Spread EMA:</span>
+          <span id="indSpread" class="font-bold text-gray-200">+₱0.36 (+1.19%)</span>
+        </div>
+      </div>
+
+      <!-- VIEW TOGGLE TABS (4 MODES) -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-3">
+        <div class="inline-flex p-1 bg-gray-900 rounded-xl border border-gray-800 flex-wrap gap-1">
+          <button 
+            id="tabGraphBtn" 
+            onclick="switchView('graph')" 
+            class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-600/30"
+          >
+            <i class="fa-solid fa-chart-area"></i> Interactive Graph
+          </button>
+          <button 
+            id="tabTableBtn" 
+            onclick="switchView('table')" 
+            class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 text-gray-400 hover:text-white"
+          >
+            <i class="fa-solid fa-table-list"></i> Historical Table
+          </button>
+          <button 
+            id="tabGridBtn" 
+            onclick="switchView('grid')" 
+            class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 text-gray-400 hover:text-white"
+          >
+            <i class="fa-solid fa-table-cells text-emerald-400"></i> Excel Market Grid
+          </button>
+          <button 
+            id="tabAdvisorBtn" 
+            onclick="switchView('advisor')" 
+            class="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 text-gray-400 hover:text-white"
+          >
+            <i class="fa-solid fa-brain text-purple-400"></i> AI Budget Advisor
+          </button>
+        </div>
+
+        <!-- Extra Graph Controls (When in Graph mode) -->
+        <div id="graphControls" class="flex items-center gap-2 text-xs">
+          <button 
+            id="toggleEmaBtn"
+            onclick="toggleEmaLines()" 
+            class="px-3 py-1.5 rounded-lg bg-gray-900 border border-cyan-500/50 text-cyan-400 font-mono transition-colors flex items-center gap-1.5"
+          >
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span> Toggle EMAs
+          </button>
+          <button 
+            id="toggleCorridorBtn"
+            onclick="toggleCorridorBand()" 
+            class="px-3 py-1.5 rounded-lg bg-gray-900 border border-amber-500/50 text-amber-400 font-mono transition-colors flex items-center gap-1.5"
+          >
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span> Volatility Band
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB VIEW 1: INTERACTIVE GRAPH -->
+      <div id="viewGraph" class="p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-xl space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs text-gray-400 pb-2 border-b border-gray-800/60">
+          <div class="flex items-center gap-3 sm:gap-4 flex-wrap">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-blue-500 rounded"></span> Historical Close</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 border-t border-dashed border-cyan-400"></span> 9-EMA</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 border-t border-dashed border-indigo-400"></span> 21-EMA</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-orange-500/30"></span> <strong>Forecast Projection (Dashed Orange)</strong></span>
+          </div>
+
+          <!-- Timeframe & Range Selector (1M, 3M, 6M, 12M) -->
+          <div class="flex items-center gap-2 self-start lg:self-auto flex-wrap">
+            <span class="text-[11px] font-mono text-gray-400 flex items-center gap-1"><i class="fa-regular fa-calendar-days text-gray-500"></i> Timeframe:</span>
+            <div class="inline-flex rounded-lg bg-gray-950 p-1 border border-gray-800 font-mono text-xs shadow-inner">
+              <button 
+                id="tfBtn-1M" 
+                onclick="changeTimeframe('1M')" 
+                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
+                title="1 Month (22 Trading Days)"
+              >
+                1M
+              </button>
+              <button 
+                id="tfBtn-3M" 
+                onclick="changeTimeframe('3M')" 
+                class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold shadow-sm transition-all"
+                title="3 Months (65 Trading Days)"
+              >
+                3M
+              </button>
+              <button 
+                id="tfBtn-6M" 
+                onclick="changeTimeframe('6M')" 
+                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
+                title="6 Months (130 Trading Days)"
+              >
+                6M
+              </button>
+              <button 
+                id="tfBtn-12M" 
+                onclick="changeTimeframe('12M')" 
+                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
+                title="12 Months / 1 Year (252 Trading Days)"
+              >
+                12M
+              </button>
+            </div>
+            <span id="chartRangeSubtitle" class="font-mono text-[11px] text-gray-400 bg-gray-800/80 px-2 py-0.5 rounded border border-gray-700/60 hidden sm:inline">Trailing 3 Months</span>
+          </div>
+        </div>
+
+        <div class="relative w-full h-[440px]">
+          <canvas id="stockChart"></canvas>
+        </div>
+      </div>
+
+      <!-- TAB VIEW 2: HISTORICAL DATA TABLE -->
+      <div id="viewTable" class="hidden p-5 rounded-2xl bg-gray-900/80 border border-gray-800 shadow-xl space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-blue-400"></i>
+            Historical OHLCV & Technical Analysis Matrix
+          </h3>
+          <span id="tableRangeSubtitle" class="text-xs font-mono text-gray-400">Forecast Row + Trailing 3 Months (65 Trading Days)</span>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-gray-800">
+          <table class="w-full text-left border-collapse text-xs font-mono">
+            <thead>
+              <tr class="bg-gray-800/90 text-gray-300 border-b border-gray-700">
+                <th class="py-3 px-4">Date</th>
+                <th class="py-3 px-3">Type</th>
+                <th class="py-3 px-3 text-right">Close / Target (₱)</th>
+                <th class="py-3 px-3 text-right">Open</th>
+                <th class="py-3 px-3 text-right">High</th>
+                <th class="py-3 px-3 text-right">Low</th>
+                <th class="py-3 px-3 text-right">Volume</th>
+                <th class="py-3 px-3 text-right text-cyan-400">EMA 9</th>
+                <th class="py-3 px-3 text-right text-indigo-400">EMA 21</th>
+                <th class="py-3 px-3 text-right text-emerald-400">RSI (14)</th>
+                <th class="py-3 px-3 text-right text-amber-400">ATR (14)</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-gray-800">
+              <!-- Dynamically populated with forecast row on top -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB VIEW 3: EXCEL MARKET GRID -->
+      <div id="viewGrid" class="hidden p-5 rounded-2xl bg-gray-900/90 border border-gray-800 shadow-2xl space-y-4">
+        <!-- Excel-Style Toolbar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-800">
+          <div class="flex items-center gap-3">
+            <div class="px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 font-bold flex items-center gap-2">
+              <i class="fa-solid fa-file-excel text-lg"></i>
+              <span class="text-sm">PSE Market Rates Matrix</span>
+            </div>
+            <span class="text-xs text-gray-400 hidden md:inline font-mono">Excel Gridlines View • Real-time rates & tomorrow's forecasts</span>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative">
+              <input 
+                type="text" 
+                id="gridFilterInput" 
+                placeholder="Filter company or sector..." 
+                oninput="filterGridTable()"
+                class="pl-8 pr-3 py-1.5 bg-gray-950 border border-gray-700 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+              />
+              <i class="fa-solid fa-filter absolute left-2.5 top-2.5 text-gray-500 text-[10px]"></i>
+            </div>
+
+            <button 
+              onclick="exportGridToCSV()" 
+              title="Download CSV for Microsoft Excel"
+              class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold font-mono flex items-center gap-1.5 shadow-md shadow-emerald-700/20 transition-all"
+            >
+              <i class="fa-solid fa-download"></i> Export CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Excel Gridlines Table Container -->
+        <div class="overflow-x-auto rounded-lg border-2 border-gray-700 bg-[#080d1a] shadow-inner max-h-[600px] overflow-y-auto">
+          <table class="w-full text-left excel-table text-xs font-mono select-none" id="excelGridTable">
+            <thead class="sticky top-0 z-20 bg-[#152033] text-gray-200">
+              <tr class="border-b-2 border-emerald-600">
+                <th class="py-2.5 px-3 w-10 text-center bg-[#0d1627] text-gray-400 font-bold">#</th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-gray-800" onclick="sortGrid('ticker')">
+                  Ticker <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-4 cursor-pointer hover:bg-gray-800" onclick="sortGrid('company_name')">
+                  Company Name <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 cursor-pointer hover:bg-gray-800" onclick="sortGrid('sector')">
+                  Sector <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-gray-800 bg-gray-800/40" onclick="sortGrid('latest_close')">
+                  Stock Rate (₱) <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-gray-800" onclick="sortGrid('day_pct_change')">
+                  Day Change <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-gray-800 text-amber-400 bg-amber-950/20" onclick="sortGrid('projected_price')">
+                  Target (₱) <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-center cursor-pointer hover:bg-gray-800" onclick="sortGrid('trend')">
+                  Trend <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-right cursor-pointer hover:bg-gray-800" onclick="sortGrid('confidence')">
+                  Confidence <i class="fa-solid fa-sort text-[10px] text-gray-500"></i>
+                </th>
+                <th class="py-2.5 px-3 text-center">Corridor (Low - High)</th>
+                <th class="py-2.5 px-3 text-right text-cyan-400" onclick="sortGrid('ema9')">9-EMA</th>
+                <th class="py-2.5 px-3 text-right text-indigo-400" onclick="sortGrid('ema21')">21-EMA</th>
+                <th class="py-2.5 px-3 text-right text-emerald-400" onclick="sortGrid('rsi14')">RSI</th>
+                <th class="py-2.5 px-3 text-right text-amber-400" onclick="sortGrid('atr14')">ATR</th>
+                <th class="py-2.5 px-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="excelGridBody" class="font-mono bg-[#0c1322]">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-gray-400 font-mono pt-1">
+          <span class="flex items-center gap-1.5">
+            <i class="fa-solid fa-lightbulb text-amber-400"></i> 
+            <span>Click any company row to load its interactive chart and forecast in the terminal.</span>
+          </span>
+          <span id="gridTotalCount" class="text-emerald-400 font-semibold">16 Companies in Matrix</span>
+        </div>
+      </div>
+
+      <!-- TAB VIEW 4: AI BUDGET & STOCK ADVISOR -->
+      <div id="viewAdvisor" class="hidden p-5 rounded-2xl bg-gray-900/90 border border-purple-500/30 shadow-2xl space-y-6">
+        
+        <!-- Advisor Banner -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-800">
+          <div class="flex items-center gap-3">
+            <div class="p-3 rounded-xl bg-purple-600/20 border border-purple-500/40 text-purple-400 text-2xl shadow-lg shadow-purple-500/10">
+              <i class="fa-solid fa-brain"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                AI Stock Picker & Budget Allocator
+                <span class="text-xs px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30">Smart Engine</span>
+              </h3>
+              <p class="text-xs text-gray-400">Probability-driven portfolio suggestions tailored to your cash budget & risk tolerance.</p>
+            </div>
+          </div>
+          <button 
+            onclick="runAiAdvisor()" 
+            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs tracking-wider uppercase font-mono shadow-lg shadow-purple-600/30 transition-all flex items-center gap-2 justify-center"
+          >
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Run AI Analysis
+          </button>
+        </div>
+
+        <!-- User Budget & Parameter Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-[#0e1627] border border-gray-800 font-mono">
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">
+              <i class="fa-solid fa-wallet text-amber-400"></i> Investment Budget (PHP ₱):
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-3 flex items-center text-gray-400 font-bold">₱</span>
+              <input 
+                type="number" 
+                id="advBudget" 
+                value="25000" 
+                min="500" 
+                step="500" 
+                class="w-full pl-8 pr-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <div class="flex items-center gap-1.5 mt-2">
+              <button onclick="setBudget(10000)" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">₱10k</button>
+              <button onclick="setBudget(25000)" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">₱25k</button>
+              <button onclick="setBudget(50000)" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">₱50k</button>
+              <button onclick="setBudget(100000)" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">₱100k</button>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">
+              <i class="fa-solid fa-shield-halved text-blue-400"></i> Risk Strategy:
+            </label>
+            <select 
+              id="advRisk" 
+              class="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="balanced" selected>Balanced Growth (Recommended)</option>
+              <option value="conservative">Conservative (Mega Blue-Chips / Low Volatility)</option>
+              <option value="aggressive">Aggressive (High Momentum / Breakout Potential)</option>
+            </select>
+            <p class="text-[10px] text-gray-500 mt-2">Adjusts win probability model and capital diversification.</p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">
+              <i class="fa-solid fa-clock text-emerald-400"></i> Time Horizon:
+            </label>
+            <select 
+              id="advHorizon" 
+              class="w-full px-3 py-2 bg-gray-950 border border-gray-700 rounded-lg text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="short" selected>Short-Term Swing (1–5 Days)</option>
+              <option value="medium">Medium-Term (1–3 Months)</option>
+              <option value="long">Long-Term (6+ Months)</option>
+            </select>
+            <p class="text-[10px] text-gray-500 mt-2">Optimizes entry targets and holding conviction.</p>
+          </div>
+        </div>
+
+        <!-- AI Executive Rationale Summary -->
+        <div id="advSummaryCard" class="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs font-mono text-purple-200 flex items-start gap-3">
+          <i class="fa-solid fa-quote-left text-purple-400 text-base mt-0.5"></i>
+          <div>
+            <span class="font-bold text-white">AI Market Assessment:</span>
+            <p id="advSummaryText" class="mt-1 leading-relaxed text-gray-300">Click "Run AI Analysis" to compute the top recommended stocks and capital allocation for your budget.</p>
+          </div>
+        </div>
+
+        <!-- Suggested Portfolio Allocation Cards -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider font-mono flex items-center justify-between">
+            <span><i class="fa-solid fa-pie-chart text-purple-400"></i> Optimized Stock Allocation Plan</span>
+            <span id="advStats" class="text-emerald-400 font-bold">Invested: ₱0.00 • Expected ROI: 0.0%</span>
+          </h4>
+          <div id="advPortfolioContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Dynamically populated portfolio recommendation cards -->
+          </div>
+        </div>
+
+        <!-- Full Market Win-Probability Rankings -->
+        <div class="space-y-3 pt-2">
+          <h4 class="text-xs font-bold text-gray-300 uppercase tracking-wider font-mono flex items-center gap-2">
+            <i class="fa-solid fa-list-ol text-blue-400"></i> Market-Wide Win Probability Leaderboard
+          </h4>
+          <div class="overflow-x-auto rounded-xl border border-gray-800">
+            <table class="w-full text-left border-collapse text-xs font-mono">
+              <thead class="bg-[#121a2c] text-gray-300 border-b border-gray-700">
+                <tr>
+                  <th class="py-2.5 px-3">Rank</th>
+                  <th class="py-2.5 px-3">Ticker</th>
+                  <th class="py-2.5 px-3">Company</th>
+                  <th class="py-2.5 px-3 text-right">Price (₱)</th>
+                  <th class="py-2.5 px-3 text-right">Projected Target</th>
+                  <th class="py-2.5 px-3 text-center">Trend</th>
+                  <th class="py-2.5 px-3 text-center">Win Probability</th>
+                  <th class="py-2.5 px-3 text-right">Stop Loss</th>
+                  <th class="py-2.5 px-3 text-right">Target Exit</th>
+                  <th class="py-2.5 px-3 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="advRankingsBody" class="divide-y divide-gray-800">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-gray-800 bg-[#0d1322] py-4 text-center text-xs text-gray-500 font-mono">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>
+        Philippine Stock Exchange (PSE) Forecast Engine • Port 8500 • Safe Independent Node
+      </div>
+      <div class="flex items-center gap-3 text-gray-400">
+        <span>EMA(9, 21)</span>
+        <span>•</span>
+        <span>RSI(14)</span>
+        <span>•</span>
+        <span>ATR(14)</span>
+        <span>•</span>
+        <span>AI Budget Optimizer</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    const API_BASE = window.location.origin;
+    const DEFAULT_FAVORITES = ['ALI', 'BDO', 'SM', 'BPI', 'ICT', 'TEL', 'JFC', 'AC', 'SMPH', 'GLO'];
+    
+    let currentTicker = 'ALI';
+    let stockData = null;
+    let chartInstance = null;
+    let showEma = true;
+    let showCorridor = true;
+    let activeView = 'graph';
+    let marketGridData = [];
+    let currentSortCol = 'latest_close';
+    let currentSortAsc = false;
+
+    // Timeframe Configuration (1M, 3M, 6M, 12M)
+    let currentTimeframe = '3M';
+    const TIMEFRAME_CONFIG = {
+      '1M': { days: 22, label: 'Trailing 1 Month (22 Trading Days)' },
+      '3M': { days: 65, label: 'Trailing 3 Months (65 Trading Days)' },
+      '6M': { days: 130, label: 'Trailing 6 Months (130 Trading Days)' },
+      '12M': { days: 252, label: 'Trailing 12 Months (252 Trading Days)' }
+    };
+
+    function changeTimeframe(tf) {
+      if (!TIMEFRAME_CONFIG[tf]) return;
+      currentTimeframe = tf;
+
+      // Update button styling
+      ['1M', '3M', '6M', '12M'].forEach(k => {
+        const b = document.getElementById(`tfBtn-${k}`);
+        if (!b) return;
+        if (k === tf) {
+          b.className = 'px-2.5 py-1 rounded bg-blue-600 text-white font-bold shadow-sm transition-all';
+        } else {
+          b.className = 'px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold';
+        }
+      });
+
+      const sub = document.getElementById('chartRangeSubtitle');
+      if (sub) sub.textContent = TIMEFRAME_CONFIG[tf].label;
+
+      const tblSub = document.getElementById('tableRangeSubtitle');
+      if (tblSub) tblSub.textContent = `Forecast Row + ${TIMEFRAME_CONFIG[tf].label}`;
+
+      loadStock(currentTicker);
+    }
+
+    // Favorites persistence via localStorage
+    function getFavorites() {
+      try {
+        const stored = localStorage.getItem('pse_favorites');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.warn('LocalStorage error', e);
+      }
+      return DEFAULT_FAVORITES;
+    }
+
+    function saveFavorites(favs) {
+      try {
+        localStorage.setItem('pse_favorites', JSON.stringify(favs));
+      } catch (e) {
+        console.error('Failed to save favorites', e);
+      }
+      renderFavoritesBar();
+    }
+
+    function isFavorite(ticker) {
+      const sym = ticker.toUpperCase().replace('.PS', '');
+      return getFavorites().includes(sym);
+    }
+
+    function toggleCurrentFavorite() {
+      const sym = currentTicker.toUpperCase().replace('.PS', '');
+      let favs = getFavorites();
+      if (favs.includes(sym)) {
+        favs = favs.filter(t => t !== sym);
+      } else {
+        favs.push(sym);
+      }
+      saveFavorites(favs);
+      updateFavoriteIcon();
+    }
+
+    function updateFavoriteIcon() {
+      const starIcon = document.getElementById('starIcon');
+      const btn = document.getElementById('btnToggleFavorite');
+      if (isFavorite(currentTicker)) {
+        starIcon.className = 'fa-solid fa-star text-amber-400';
+        btn.classList.add('border-amber-400/50');
+      } else {
+        starIcon.className = 'fa-regular fa-star text-gray-400';
+        btn.classList.remove('border-amber-400/50');
+      }
+    }
+
+    function renderFavoritesBar() {
+      const container = document.getElementById('favoritesContainer');
+      const favs = getFavorites();
+      container.innerHTML = '';
+
+      favs.forEach(sym => {
+        const isActive = sym.toUpperCase() === currentTicker.toUpperCase().replace('.PS', '');
+        const btn = document.createElement('button');
+        btn.className = `px-3 py-1 rounded-full text-xs font-mono font-semibold transition-all shrink-0 ${
+          isActive 
+            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-1 ring-blue-400' 
+            : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700/60'
+        }`;
+        btn.textContent = sym;
+        btn.onclick = () => selectTicker(sym);
+        container.appendChild(btn);
+      });
+    }
+
+    function switchView(view) {
+      activeView = view;
+      const graphSection = document.getElementById('viewGraph');
+      const tableSection = document.getElementById('viewTable');
+      const gridSection = document.getElementById('viewGrid');
+      const advSection = document.getElementById('viewAdvisor');
+      const graphControls = document.getElementById('graphControls');
+
+      const graphBtn = document.getElementById('tabGraphBtn');
+      const tableBtn = document.getElementById('tabTableBtn');
+      const gridBtn = document.getElementById('tabGridBtn');
+      const advBtn = document.getElementById('tabAdvisorBtn');
+
+      // Reset tabs style
+      [graphBtn, tableBtn, gridBtn, advBtn].forEach(b => {
+        b.className = 'px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 text-gray-400 hover:text-white';
+      });
+
+      // Hide all sections
+      graphSection.classList.add('hidden');
+      tableSection.classList.add('hidden');
+      gridSection.classList.add('hidden');
+      advSection.classList.add('hidden');
+      graphControls.classList.add('hidden');
+
+      if (view === 'graph') {
+        graphSection.classList.remove('hidden');
+        graphControls.classList.remove('hidden');
+        graphBtn.className = 'px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-600/30';
+        if (chartInstance) chartInstance.resize();
+      } else if (view === 'table') {
+        tableSection.classList.remove('hidden');
+        tableBtn.className = 'px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow-md shadow-blue-600/30';
+      } else if (view === 'grid') {
+        gridSection.classList.remove('hidden');
+        gridBtn.className = 'px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-emerald-600 text-white shadow-md shadow-emerald-600/30';
+        if (marketGridData.length === 0) loadMarketGrid();
+      } else if (view === 'advisor') {
+        advSection.classList.remove('hidden');
+        advBtn.className = 'px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-purple-600 text-white shadow-md shadow-purple-600/30';
+        runAiAdvisor();
+      }
+    }
+
+    function toggleEmaLines() {
+      showEma = !showEma;
+      const btn = document.getElementById('toggleEmaBtn');
+      if (showEma) {
+        btn.className = 'px-3 py-1.5 rounded-lg bg-gray-900 border border-cyan-500/50 text-cyan-400 font-mono transition-colors flex items-center gap-1.5';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-500 font-mono transition-colors flex items-center gap-1.5';
+      }
+      renderChart();
+    }
+
+    function toggleCorridorBand() {
+      showCorridor = !showCorridor;
+      const btn = document.getElementById('toggleCorridorBtn');
+      if (showCorridor) {
+        btn.className = 'px-3 py-1.5 rounded-lg bg-gray-900 border border-amber-500/50 text-amber-400 font-mono transition-colors flex items-center gap-1.5';
+      } else {
+        btn.className = 'px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-500 font-mono transition-colors flex items-center gap-1.5';
+      }
+      renderChart();
+    }
+
+    async function loadStock(ticker) {
+      showLoading(true);
+      dismissError();
+
+      try {
+        const clean = ticker.trim().toUpperCase().replace('.PS', '');
+        const days = TIMEFRAME_CONFIG[currentTimeframe]?.days || 65;
+        const res = await fetch(`${API_BASE}/api/stock/${clean}?days=${days}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Failed to fetch data for ${clean}.PS`);
+        }
+        stockData = await res.json();
+        currentTicker = clean;
+        document.getElementById('tickerInput').value = clean;
+        updateUI();
+      } catch (err) {
+        console.error('Error fetching stock:', err);
+        showError(err.message || 'Failed to query PSE stock data');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function selectTicker(ticker) {
+      loadStock(ticker);
+      if (activeView !== 'graph' && activeView !== 'table') {
+        switchView('graph');
+      }
+    }
+
+    function handleSearch() {
+      const val = document.getElementById('tickerInput').value;
+      if (val && val.trim()) {
+        loadStock(val.trim());
+      }
+    }
+
+    function showLoading(isLoading) {
+      const loader = document.getElementById('loadingOverlay');
+      const content = document.getElementById('contentSection');
+      if (isLoading) {
+        loader.classList.remove('hidden');
+        content.classList.add('opacity-40', 'pointer-events-none');
+      } else {
+        loader.classList.add('hidden');
+        content.classList.remove('opacity-40', 'pointer-events-none');
+      }
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById('errorAlert');
+      document.getElementById('errorMessage').textContent = msg;
+      banner.classList.remove('hidden');
+    }
+
+    function dismissError() {
+      document.getElementById('errorAlert').classList.add('hidden');
+    }
+
+    function formatNumber(num) {
+      if (num === null || num === undefined) return '-';
+      return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatVolume(val) {
+      if (!val) return '0';
+      if (val >= 1000000) return (val / 1000000).toFixed(2) + 'M';
+      if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
+      return val.toLocaleString();
+    }
+
+    function updateUI() {
+      if (!stockData) return;
+
+      document.getElementById('dispSymbol').textContent = stockData.symbol;
+      document.getElementById('dispName').textContent = stockData.company_name;
+      document.getElementById('dispSector').textContent = stockData.sector || 'Equities';
+      document.getElementById('dispLastDate').textContent = stockData.latest_date;
+      document.getElementById('dispNextDate').textContent = stockData.next_date;
+      document.getElementById('dispDataSource').textContent = `FEED: ${stockData.source === 'yfinance' ? 'LIVE YFINANCE' : 'PSE REALTIME ENGINE'}`;
+
+      // Price & Day Change
+      document.getElementById('dispClosePrice').textContent = formatNumber(stockData.latest_close);
+      const isPositive = stockData.day_change >= 0;
+      const changeSign = isPositive ? '+' : '';
+      const badge = document.getElementById('dispChangeBadge');
+      const changeIcon = document.getElementById('dispChangeIcon');
+      const valSpan = document.getElementById('dispChangeVal');
+      const changeStr = `${changeSign}${formatNumber(stockData.day_change)} (${changeSign}${stockData.day_pct_change}%)`;
+
+      if (valSpan) valSpan.textContent = changeStr;
+
+      if (isPositive) {
+        badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-md flex items-center gap-1 font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 mt-1';
+        if (changeIcon) changeIcon.className = 'fa-solid fa-arrow-trend-up';
+      } else {
+        badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-md flex items-center gap-1 font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 mt-1';
+        if (changeIcon) changeIcon.className = 'fa-solid fa-arrow-trend-down';
+      }
+
+      // Forecast Engine Card 1: Projected Price
+      const fc = stockData.forecast;
+      document.getElementById('fcProjectedPrice').textContent = formatNumber(fc.projected_price);
+      const expSign = fc.expected_change >= 0 ? '+' : '';
+      const expElem = document.getElementById('fcExpectedChange');
+      expElem.textContent = `${expSign}₱${formatNumber(fc.expected_change)} (${expSign}${fc.expected_percent_change}%)`;
+      expElem.className = `font-mono font-semibold ${fc.expected_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      // Forecast Engine Card 2: Trend Direction
+      const trendBadge = document.getElementById('fcTrendBadge');
+      const trendIcon = document.getElementById('fcTrendIcon');
+      const trendText = document.getElementById('fcTrendText');
+      trendText.textContent = fc.trend;
+
+      if (fc.trend === 'Bullish') {
+        trendBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-base tracking-wide bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+        trendIcon.className = 'fa-solid fa-arrow-trend-up';
+        document.getElementById('fcEmaAlignment').textContent = '9 EMA > 21 EMA (Bullish)';
+      } else if (fc.trend === 'Bearish') {
+        trendBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-base tracking-wide bg-rose-500/20 text-rose-400 border border-rose-500/40';
+        trendIcon.className = 'fa-solid fa-arrow-trend-down';
+        document.getElementById('fcEmaAlignment').textContent = '9 EMA < 21 EMA (Bearish)';
+      } else {
+        trendBadge.className = 'inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-bold text-base tracking-wide bg-gray-700/40 text-gray-300 border border-gray-600';
+        trendIcon.className = 'fa-solid fa-arrows-left-right';
+        document.getElementById('fcEmaAlignment').textContent = 'Consolidation / Range';
+      }
+
+      // Forecast Engine Card 3: Confidence Rating
+      document.getElementById('fcConfidenceVal').textContent = `${fc.confidence}%`;
+      const bar = document.getElementById('fcConfidenceBar');
+      bar.style.width = `${fc.confidence}%`;
+      const grade = document.getElementById('fcConfidenceGrade');
+      if (fc.confidence >= 75) grade.textContent = 'High Conviction';
+      else if (fc.confidence >= 60) grade.textContent = 'Moderate Signal';
+      else grade.textContent = 'Neutral / Weak';
+
+      // Forecast Engine Card 4: Volatility Corridor (target ± 0.75 * ATR)
+      document.getElementById('fcHighCorridor').textContent = `₱${formatNumber(fc.high_corridor)}`;
+      document.getElementById('fcLowCorridor').textContent = `₱${formatNumber(fc.low_corridor)}`;
+      document.getElementById('fcAtrVal').textContent = formatNumber(stockData.indicators.atr14);
+
+      // Technical Indicators Strip
+      document.getElementById('indEma9').textContent = `₱${formatNumber(stockData.indicators.ema9)}`;
+      document.getElementById('indEma21').textContent = `₱${formatNumber(stockData.indicators.ema21)}`;
+      const rsiVal = stockData.indicators.rsi14;
+      let rsiStatus = 'Neutral';
+      if (rsiVal >= 70) rsiStatus = 'Overbought';
+      else if (rsiVal <= 30) rsiStatus = 'Oversold';
+      else if (rsiVal >= 55) rsiStatus = 'Bullish Bias';
+      else if (rsiVal <= 45) rsiStatus = 'Bearish Bias';
+      document.getElementById('indRsi').textContent = `${rsiVal} (${rsiStatus})`;
+
+      const spreadVal = stockData.indicators.ema9 - stockData.indicators.ema21;
+      const spreadPct = (spreadVal / stockData.indicators.ema21) * 100;
+      const spSign = spreadVal >= 0 ? '+' : '';
+      document.getElementById('indSpread').textContent = `${spSign}₱${formatNumber(spreadVal)} (${spSign}${spreadPct.toFixed(2)}%)`;
+
+      renderFavoritesBar();
+      updateFavoriteIcon();
+      renderChart();
+      renderTable();
+
+      const timeBadge = document.getElementById('lastUpdatedTime');
+      if (timeBadge) {
+        const now = new Date();
+        timeBadge.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+    }
+
+    function renderChart() {
+      if (!stockData || !stockData.history || stockData.history.length === 0) return;
+
+      const history = stockData.history;
+      const dates = history.map(h => h.date);
+      const closes = history.map(h => h.close);
+      const ema9s = history.map(h => h.ema9);
+      const ema21s = history.map(h => h.ema21);
+
+      const nextDateLabel = `${stockData.next_date} (Forecast)`;
+      const chartLabels = [...dates, nextDateLabel];
+
+      const historicalSeries = [...closes, null];
+
+      const projectionSeries = new Array(dates.length - 1).fill(null);
+      projectionSeries.push(closes[closes.length - 1]);
+      projectionSeries.push(stockData.forecast.projected_price);
+
+      const highCorridorSeries = new Array(dates.length).fill(null);
+      highCorridorSeries.push(stockData.forecast.high_corridor);
+
+      const lowCorridorSeries = new Array(dates.length).fill(null);
+      lowCorridorSeries.push(stockData.forecast.low_corridor);
+
+      const ctx = document.getElementById('stockChart').getContext('2d');
+
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.35)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
+
+      const datasets = [
+        {
+          label: 'Historical Close (₱)',
+          data: historicalSeries,
+          borderColor: '#3b82f6',
+          borderWidth: 2.5,
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.15,
+          pointRadius: (ctx) => {
+            if (currentTimeframe === '12M') return 0;
+            if (currentTimeframe === '6M') return 0.8;
+            return 1.8;
+          },
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#3b82f6',
+          pointBorderColor: '#ffffff',
+          order: 3,
+        },
+        {
+          label: 'Next-Day Projection',
+          data: projectionSeries,
+          borderColor: '#f97316',
+          borderWidth: 2.5,
+          borderDash: [6, 6],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0,
+          pointRadius: (ctx) => {
+            return ctx.dataIndex === chartLabels.length - 1 ? 8 : 2;
+          },
+          pointHoverRadius: 10,
+          pointBackgroundColor: '#f97316',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          order: 1,
+        }
+      ];
+
+      if (showCorridor) {
+        datasets.push({
+          label: 'Corridor High (+0.75 ATR)',
+          data: highCorridorSeries,
+          borderColor: 'rgba(16, 185, 129, 0.8)',
+          backgroundColor: '#10b981',
+          pointStyle: 'triangle',
+          pointRadius: 7,
+          showLine: false,
+          order: 2,
+        });
+        datasets.push({
+          label: 'Corridor Low (-0.75 ATR)',
+          data: lowCorridorSeries,
+          borderColor: 'rgba(239, 68, 68, 0.8)',
+          backgroundColor: '#ef4444',
+          pointStyle: 'triangle',
+          rotation: 180,
+          pointRadius: 7,
+          showLine: false,
+          order: 2,
+        });
+      }
+
+      if (showEma) {
+        datasets.push({
+          label: '9-Day EMA',
+          data: [...ema9s, null],
+          borderColor: '#22d3ee',
+          borderWidth: 1.8,
+          borderDash: [4, 4],
+          fill: false,
+          pointRadius: 0,
+          tension: 0.2,
+          order: 4,
+        });
+        datasets.push({
+          label: '21-Day EMA',
+          data: [...ema21s, null],
+          borderColor: '#818cf8',
+          borderWidth: 1.8,
+          borderDash: [4, 4],
+          fill: false,
+          pointRadius: 0,
+          tension: 0.2,
+          order: 5,
+        });
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: chartLabels,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#111827',
+              borderColor: '#374151',
+              borderWidth: 1,
+              titleColor: '#f3f4f6',
+              titleFont: { family: 'JetBrains Mono', size: 12, weight: 'bold' },
+              bodyFont: { family: 'JetBrains Mono', size: 11 },
+              padding: 12,
+              callbacks: {
+                label: function(context) {
+                  const val = context.parsed.y;
+                  if (val === null || val === undefined) return null;
+                  if (context.dataset.label === 'Next-Day Projection' && context.dataIndex === chartLabels.length - 1) {
+                    return `🎯 Tomorrow Forecast: ₱${formatNumber(val)} (${stockData.forecast.trend})`;
+                  }
+                  return `${context.dataset.label}: ₱${formatNumber(val)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(55, 65, 81, 0.25)', drawBorder: false },
+              ticks: { 
+                color: '#9ca3af', 
+                font: { family: 'JetBrains Mono', size: 10 }, 
+                maxTicksLimit: currentTimeframe === '12M' ? 14 : (currentTimeframe === '6M' ? 12 : 8) 
+              }
+            },
+            y: {
+              position: 'right',
+              grid: { color: 'rgba(55, 65, 81, 0.25)', drawBorder: false },
+              ticks: { 
+                color: '#9ca3af', 
+                font: { family: 'JetBrains Mono', size: 10 }, 
+                callback: function(value) { return '₱' + value.toFixed(1); }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTable() {
+      if (!stockData || !stockData.history) return;
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      const fc = stockData.forecast;
+
+      // 1. HIGHLIGHTED FORECAST ROW AT THE VERY TOP
+      const fcRow = document.createElement('tr');
+      fcRow.className = 'bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-transparent border-b-2 border-amber-500/50 font-bold';
+      fcRow.innerHTML = `
+        <td class="py-3.5 px-4 text-amber-400 font-bold flex items-center gap-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> ${stockData.next_date}
+        </td>
+        <td class="py-3.5 px-3">
+          <span class="px-2 py-0.5 rounded bg-amber-500/30 text-amber-300 font-extrabold text-[10px] uppercase border border-amber-500/40 tracking-wider">
+            FORECAST
+          </span>
+        </td>
+        <td class="py-3.5 px-3 text-right text-amber-400 font-black text-sm">
+          ₱${formatNumber(fc.projected_price)}
+        </td>
+        <td class="py-3.5 px-3 text-right text-gray-500">-</td>
+        <td class="py-3.5 px-3 text-right text-emerald-400">₱${formatNumber(fc.high_corridor)}</td>
+        <td class="py-3.5 px-3 text-right text-rose-400">₱${formatNumber(fc.low_corridor)}</td>
+        <td class="py-3.5 px-3 text-right text-gray-400 font-semibold">${fc.confidence}% Conf.</td>
+        <td class="py-3.5 px-3 text-right text-cyan-400 font-medium">${formatNumber(stockData.indicators.ema9)}</td>
+        <td class="py-3.5 px-3 text-right text-indigo-400 font-medium">${formatNumber(stockData.indicators.ema21)}</td>
+        <td class="py-3.5 px-3 text-right text-emerald-400 font-medium">${stockData.indicators.rsi14}</td>
+        <td class="py-3.5 px-3 text-right text-amber-400 font-bold">${formatNumber(stockData.indicators.atr14)}</td>
+      `;
+      tbody.appendChild(fcRow);
+
+      // 2. HISTORICAL ROWS
+      const reversedHist = [...stockData.history].reverse();
+      reversedHist.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = idx % 2 === 0 ? 'bg-gray-900/40 hover:bg-gray-800/60' : 'bg-transparent hover:bg-gray-800/60';
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 text-gray-200">${row.date}</td>
+          <td class="py-2.5 px-3 text-gray-400"><span class="text-[10px] text-gray-500">HIST</span></td>
+          <td class="py-2.5 px-3 text-right font-bold text-gray-100">₱${formatNumber(row.close)}</td>
+          <td class="py-2.5 px-3 text-right text-gray-400">₱${formatNumber(row.open)}</td>
+          <td class="py-2.5 px-3 text-right text-gray-400">₱${formatNumber(row.high)}</td>
+          <td class="py-2.5 px-3 text-right text-gray-400">₱${formatNumber(row.low)}</td>
+          <td class="py-2.5 px-3 text-right text-gray-400">${formatVolume(row.volume)}</td>
+          <td class="py-2.5 px-3 text-right text-cyan-400/90">${formatNumber(row.ema9)}</td>
+          <td class="py-2.5 px-3 text-right text-indigo-400/90">${formatNumber(row.ema21)}</td>
+          <td class="py-2.5 px-3 text-right text-emerald-400/90">${row.rsi14 !== null ? row.rsi14 : '-'}</td>
+          <td class="py-2.5 px-3 text-right text-amber-400/90">${row.atr14 !== null ? formatNumber(row.atr14) : '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ==========================================
+    // EXCEL MARKET GRID LOGIC
+    // ==========================================
+    async function loadMarketGrid() {
+      const tbody = document.getElementById('excelGridBody');
+      tbody.innerHTML = `<tr><td colspan="15" class="py-12 text-center text-gray-400 font-mono"><i class="fa-solid fa-spinner animate-spin text-emerald-400 text-lg mr-2"></i> Fetching live market rates for all PSE companies...</td></tr>`;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/market-grid`);
+        if (!res.ok) throw new Error('Failed to load market grid');
+        const data = await res.json();
+        marketGridData = data.stocks || [];
+        renderGridTable(marketGridData);
+        const timeBadge = document.getElementById('lastUpdatedTime');
+        if (timeBadge) {
+          const now = new Date();
+          timeBadge.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+      } catch (e) {
+        console.error('Grid load error:', e);
+        tbody.innerHTML = `<tr><td colspan="15" class="py-6 text-center text-red-400 font-mono">Error loading market grid: ${e.message}</td></tr>`;
+      }
+    }
+
+    function renderGridTable(stocks) {
+      const tbody = document.getElementById('excelGridBody');
+      tbody.innerHTML = '';
+      document.getElementById('gridTotalCount').textContent = `${stocks.length} Companies in Matrix`;
+
+      if (stocks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="15" class="py-8 text-center text-gray-500 font-mono">No matching stocks found.</td></tr>`;
+        return;
+      }
+
+      stocks.forEach((s, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'cursor-pointer transition-colors';
+        tr.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            selectTicker(s.ticker);
+          }
+        };
+
+        const isPos = s.day_change >= 0;
+        const sign = isPos ? '+' : '';
+        const changeClass = isPos ? 'text-emerald-400' : 'text-rose-400';
+
+        let trendBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-300">Neutral</span>`;
+        if (s.trend === 'Bullish') {
+          trendBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Bullish</span>`;
+        } else if (s.trend === 'Bearish') {
+          trendBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">Bearish</span>`;
+        }
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 text-center bg-[#101726] text-gray-500 font-bold">${idx + 1}</td>
+          <td class="py-2.5 px-3 font-bold text-white">
+            <span class="px-2 py-1 rounded bg-blue-950/60 border border-blue-800/80 text-blue-300 font-extrabold hover:bg-blue-600 hover:text-white transition-all">
+              ${s.ticker}
+            </span>
+          </td>
+          <td class="py-2.5 px-4 text-gray-200 font-medium">${s.company_name}</td>
+          <td class="py-2.5 px-3 text-gray-400 text-[11px]">${s.sector}</td>
+          <td class="py-2.5 px-3 text-right font-bold text-gray-100 bg-[#121c2e]">₱${formatNumber(s.latest_close)}</td>
+          <td class="py-2.5 px-3 text-right font-semibold ${changeClass}">${sign}₱${formatNumber(s.day_change)} (${sign}${s.day_pct_change}%)</td>
+          <td class="py-2.5 px-3 text-right font-bold text-amber-400 bg-amber-950/20">₱${formatNumber(s.projected_price)}</td>
+          <td class="py-2.5 px-3 text-center">${trendBadge}</td>
+          <td class="py-2.5 px-3 text-right text-gray-300">${s.confidence}%</td>
+          <td class="py-2.5 px-3 text-center text-gray-400 text-[11px]">₱${formatNumber(s.low_corridor)} - ₱${formatNumber(s.high_corridor)}</td>
+          <td class="py-2.5 px-3 text-right text-cyan-400">${formatNumber(s.ema9)}</td>
+          <td class="py-2.5 px-3 text-right text-indigo-400">${formatNumber(s.ema21)}</td>
+          <td class="py-2.5 px-3 text-right text-emerald-400">${s.rsi14}</td>
+          <td class="py-2.5 px-3 text-right text-amber-400">${formatNumber(s.atr14)}</td>
+          <td class="py-2.5 px-3 text-center">
+            <button 
+              onclick="selectTicker('${s.ticker}')"
+              class="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 rounded text-[11px] font-bold transition-all"
+            >
+              Chart
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterGridTable() {
+      const q = document.getElementById('gridFilterInput').value.toLowerCase().trim();
+      if (!q) {
+        renderGridTable(marketGridData);
+        return;
+      }
+      const filtered = marketGridData.filter(s => 
+        s.ticker.toLowerCase().includes(q) || 
+        s.company_name.toLowerCase().includes(q) || 
+        s.sector.toLowerCase().includes(q)
+      );
+      renderGridTable(filtered);
+    }
+
+    function sortGrid(col) {
+      if (currentSortCol === col) {
+        currentSortAsc = !currentSortAsc;
+      } else {
+        currentSortCol = col;
+        currentSortAsc = true;
+      }
+
+      marketGridData.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+        if (typeof valA === 'string') {
+          return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return currentSortAsc ? valA - valB : valB - valA;
+      });
+
+      filterGridTable();
+    }
+
+    function exportGridToCSV() {
+      if (!marketGridData || marketGridData.length === 0) return;
+      
+      const headers = ["Ticker", "Company Name", "Sector", "Latest Close (PHP)", "Day Change (PHP)", "Day Change %", "Target Forecast (PHP)", "Trend", "Confidence %", "Low Corridor", "High Corridor", "EMA 9", "EMA 21", "RSI 14", "ATR 14"];
+      const rows = marketGridData.map(s => [
+        s.ticker,
+        `"${s.company_name}"`,
+        `"${s.sector}"`,
+        s.latest_close,
+        s.day_change,
+        s.day_pct_change,
+        s.projected_price,
+        s.trend,
+        s.confidence,
+        s.low_corridor,
+        s.high_corridor,
+        s.ema9,
+        s.ema21,
+        s.rsi14,
+        s.atr14
+      ]);
+
+      let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `PSE_Market_Rates_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ==========================================
+    // AI STOCK ADVISOR & BUDGET ALLOCATOR LOGIC
+    // ==========================================
+    function setBudget(amount) {
+      document.getElementById('advBudget').value = amount;
+      runAiAdvisor();
+    }
+
+    async function runAiAdvisor() {
+      const budgetVal = parseFloat(document.getElementById('advBudget').value) || 25000;
+      const riskVal = document.getElementById('advRisk').value;
+      const horizonVal = document.getElementById('advHorizon').value;
+
+      const container = document.getElementById('advPortfolioContainer');
+      container.innerHTML = `<div class="col-span-3 py-10 text-center text-purple-300 font-mono"><i class="fa-solid fa-brain animate-bounce text-2xl mb-2 text-purple-400"></i><p>Running probability matrix & budget optimization algorithms...</p></div>`;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/ai-advisor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ budget: budgetVal, risk_profile: riskVal, horizon: horizonVal })
+        });
+        if (!res.ok) throw new Error('AI Advisor request failed');
+        const data = await res.json();
+        renderAdvisorResults(data);
+      } catch (err) {
+        console.error('Advisor error:', err);
+        container.innerHTML = `<div class="col-span-3 py-6 text-center text-red-400 font-mono">Error generating AI analysis: ${err.message}</div>`;
+      }
+    }
+
+    function renderAdvisorResults(data) {
+      document.getElementById('advSummaryText').textContent = data.ai_summary;
+      document.getElementById('advStats').textContent = `Invested: ₱${formatNumber(data.total_invested)} • Leftover Cash: ₱${formatNumber(data.unallocated_cash)} • Expected ROI: +${data.expected_roi_pct}%`;
+
+      // 1. Render Portfolio Cards
+      const container = document.getElementById('advPortfolioContainer');
+      container.innerHTML = '';
+
+      if (!data.allocated_portfolio || data.allocated_portfolio.length === 0) {
+        container.innerHTML = `<div class="col-span-3 py-4 text-center text-gray-500 font-mono">Budget too small for single-share purchases. Please increase budget.</div>`;
+      } else {
+        data.allocated_portfolio.forEach((p, idx) => {
+          const card = document.createElement('div');
+          card.className = 'p-5 rounded-2xl bg-gradient-to-br from-[#121c2e] via-gray-900 to-gray-900 border border-purple-500/40 shadow-xl flex flex-col justify-between space-y-4';
+          card.innerHTML = `
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 font-extrabold text-xs font-mono border border-purple-500/30">
+                  Pick #${idx + 1} • ${p.allocation_pct}% Allocation
+                </span>
+                <span class="text-xs font-bold font-mono text-emerald-400 flex items-center gap-1">
+                  <i class="fa-solid fa-circle-check"></i> ${p.win_probability}% Win Prob
+                </span>
+              </div>
+
+              <div class="mt-3 flex items-baseline justify-between">
+                <div>
+                  <h4 class="text-2xl font-black text-white font-mono">${p.ticker}</h4>
+                  <p class="text-xs text-gray-400 truncate max-w-[180px]">${p.company_name}</p>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs text-gray-400 block font-mono">Buy Target</span>
+                  <span class="text-lg font-black text-amber-400 font-mono">₱${formatNumber(p.share_price)}</span>
+                </div>
+              </div>
+
+              <div class="my-3 p-3 rounded-xl bg-gray-950/80 border border-gray-800 space-y-1.5 font-mono text-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-400">Buy Quantity:</span>
+                  <strong class="text-white text-sm">${p.shares} shares</strong>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-400">Capital Invested:</span>
+                  <strong class="text-purple-300">₱${formatNumber(p.investment_value)}</strong>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-400">Projected Gain:</span>
+                  <strong class="text-emerald-400">+₱${formatNumber(p.projected_return_php)}</strong>
+                </div>
+              </div>
+
+              <p class="text-[11px] text-gray-400 leading-relaxed italic border-t border-gray-800/80 pt-2">
+                "${p.rationale}"
+              </p>
+            </div>
+
+            <div class="pt-2 flex items-center gap-2">
+              <button 
+                onclick="selectTicker('${p.ticker}')"
+                class="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold font-mono transition-all flex items-center justify-center gap-1.5 shadow-md shadow-purple-600/30"
+              >
+                <i class="fa-solid fa-chart-line"></i> View ${p.ticker} In Terminal
+              </button>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      }
+
+      // 2. Render Win Probability Leaderboard
+      const rankBody = document.getElementById('advRankingsBody');
+      rankBody.innerHTML = '';
+
+      (data.top_recommendations || []).forEach((c, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-800/50 cursor-pointer transition-colors';
+        tr.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') selectTicker(c.ticker);
+        };
+
+        const probColor = c.win_probability >= 80 ? 'text-emerald-400' : (c.win_probability >= 65 ? 'text-blue-400' : 'text-amber-400');
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 font-bold text-gray-500">#${idx + 1}</td>
+          <td class="py-2.5 px-3 font-extrabold text-blue-300">${c.ticker}</td>
+          <td class="py-2.5 px-3 text-gray-200">${c.company_name}</td>
+          <td class="py-2.5 px-3 text-right font-bold text-gray-100">₱${formatNumber(c.current_price)}</td>
+          <td class="py-2.5 px-3 text-right font-bold text-amber-400">₱${formatNumber(c.projected_price)}</td>
+          <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.trend === 'Bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-800 text-gray-300'}">${c.trend}</span></td>
+          <td class="py-2.5 px-3 text-center font-black ${probColor}">
+            <div class="flex items-center justify-center gap-1.5">
+              <span>${c.win_probability}%</span>
+              <div class="w-10 bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                <div class="h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-emerald-400" style="width: ${c.win_probability}%;"></div>
+              </div>
+            </div>
+          </td>
+          <td class="py-2.5 px-3 text-right text-rose-400 font-medium">₱${formatNumber(c.stop_loss)}</td>
+          <td class="py-2.5 px-3 text-right text-emerald-400 font-bold">₱${formatNumber(c.target_profit)}</td>
+          <td class="py-2.5 px-3 text-center">
+            <button 
+              onclick="selectTicker('${c.ticker}')"
+              class="px-2 py-1 bg-gray-800 hover:bg-blue-600 text-gray-300 hover:text-white rounded text-[11px] font-bold font-mono transition-all"
+            >
+              Analyze
+            </button>
+          </td>
+        `;
+        rankBody.appendChild(tr);
+      });
+    }
+
+    // Manual Refresh Trigger
+    async function triggerManualRefresh() {
+      const icon = document.getElementById('refreshIcon');
+      const label = document.getElementById('refreshLabel');
+      const btn = document.getElementById('btnRefreshData');
+
+      if (icon) icon.classList.add('fa-spin');
+      if (label) label.textContent = 'Updating...';
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/refresh`);
+        const json = await res.json();
+
+        // Refresh active view
+        if (activeView === 'graph' || activeView === 'table') {
+          await loadStock(currentTicker);
+        } else if (activeView === 'grid') {
+          await loadMarketGrid();
+        } else if (activeView === 'advisor') {
+          await runAiAdvisor();
+        }
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const timeBadge = document.getElementById('lastUpdatedTime');
+        if (timeBadge) timeBadge.textContent = timeStr;
+
+        if (label) label.textContent = 'Updated!';
+        setTimeout(() => {
+          if (label) label.textContent = 'Refresh';
+        }, 1500);
+      } catch (err) {
+        console.error('Manual refresh error:', err);
+        if (label) label.textContent = 'Error';
+        setTimeout(() => {
+          if (label) label.textContent = 'Refresh';
+        }, 2000);
+      } finally {
+        if (icon) icon.classList.remove('fa-spin');
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // Initialize application on DOM ready
+    window.addEventListener('DOMContentLoaded', () => {
+      const currentPort = window.location.port || '8500';
+      document.getElementById('portLabel').textContent = currentPort;
+
+      renderFavoritesBar();
+      loadStock(currentTicker);
+
+      // Auto-refresh current view every 60 seconds without needing manual page reloads
+      setInterval(() => {
+        if (activeView === 'graph' || activeView === 'table') {
+          loadStock(currentTicker);
+        } else if (activeView === 'grid') {
+          loadMarketGrid();
+        }
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const timeBadge = document.getElementById('lastUpdatedTime');
+        if (timeBadge) timeBadge.textContent = timeStr;
+      }, 60000);
+    });
+  </script>
+</body>
+</html>
