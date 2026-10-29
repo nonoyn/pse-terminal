@@ -3,6 +3,7 @@ import sys
 import math
 import time
 import random
+import re
 import requests
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -11,7 +12,6 @@ from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-import yfinance as yf
 import pandas as pd
 import numpy as np
 
@@ -29,15 +29,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def clean_symbol(ticker: str) -> str:
+    """Normalize input to clean ticker (e.g. 'ali' -> 'ALI')."""
+    s = ticker.strip().upper()
+    if s.endswith(".PS"):
+        s = s[:-3]
+    return s
+
 # Reference catalog of major PSE stocks with industry sectors & base metrics
 PSE_CATALOG: Dict[str, Dict[str, Any]] = {
-    "ALI": {"name": "Ayala Land, Inc.", "base": 15.70, "sector": "Property", "volatility": 0.022, "cap": "Large"},
-    "BDO": {"name": "BDO Unibank, Inc.", "base": 116.40, "sector": "Financials", "volatility": 0.015, "cap": "Large"},
-    "SM": {"name": "SM Investments Corporation", "base": 531.00, "sector": "Holding Firms", "volatility": 0.014, "cap": "Mega"},
-    "BPI": {"name": "Bank of the Philippine Islands", "base": 97.00, "sector": "Financials", "volatility": 0.016, "cap": "Large"},
-    "ICT": {"name": "International Container Terminal Services", "base": 852.00, "sector": "Services / Logistics", "volatility": 0.022, "cap": "Large"},
+    "ALI": {"name": "Ayala Land, Inc.", "base": 15.34, "sector": "Property", "volatility": 0.022, "cap": "Large"},
+    "BDO": {"name": "BDO Unibank, Inc.", "base": 117.40, "sector": "Financials", "volatility": 0.015, "cap": "Large"},
+    "SM": {"name": "SM Investments Corporation", "base": 546.00, "sector": "Holding Firms", "volatility": 0.014, "cap": "Mega"},
+    "BPI": {"name": "Bank of the Philippine Islands", "base": 95.00, "sector": "Financials", "volatility": 0.016, "cap": "Large"},
+    "ICT": {"name": "International Container Terminal Services", "base": 840.00, "sector": "Services / Logistics", "volatility": 0.022, "cap": "Large"},
     "TEL": {"name": "PLDT Inc.", "base": 1190.00, "sector": "Telecom", "volatility": 0.018, "cap": "Large"},
-    "JFC": {"name": "Jollibee Foods Corporation", "base": 143.50, "sector": "Consumer / Food", "volatility": 0.017, "cap": "Large"},
+    "JFC": {"name": "Jollibee Foods Corporation", "base": 141.90, "sector": "Consumer / Food", "volatility": 0.017, "cap": "Large"},
     "AC": {"name": "Ayala Corporation", "base": 540.00, "sector": "Holding Firms", "volatility": 0.016, "cap": "Large"},
     "SMPH": {"name": "SM Prime Holdings, Inc.", "base": 17.12, "sector": "Property", "volatility": 0.018, "cap": "Large"},
     "GLO": {"name": "Globe Telecom, Inc.", "base": 1550.00, "sector": "Telecom", "volatility": 0.018, "cap": "Large"},
@@ -51,10 +58,90 @@ PSE_CATALOG: Dict[str, Dict[str, Any]] = {
 
 _TV_CACHE: Dict[str, Any] = {"timestamp": 0.0, "data": {}}
 
+def fetch_pse_edge_stock(ticker: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetches official real-time stock quote directly from Philippine Stock Exchange (PSE) EDGE.
+    """
+    clean_sym = clean_symbol(ticker)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://edge.pse.com.ph/"
+    }
+    try:
+        s = requests.Session()
+        s.headers.update(headers)
+        search_url = "https://edge.pse.com.ph/autoComplete/searchCompanyNameSymbol.ax"
+        r = s.post(search_url, data={"term": clean_sym}, timeout=6)
+        if r.status_code != 200:
+            return None
+        items = r.json()
+        match = next((item for item in items if item.get("symbol", "").upper() == clean_sym), items[0] if items else None)
+        if not match or "cmpyId" not in match:
+            return None
+
+        cmpy_id = match["cmpyId"]
+        data_url = f"https://edge.pse.com.ph/companyPage/stockData.do?cmpy_id={cmpy_id}"
+        r2 = s.get(data_url, timeout=6)
+        if r2.status_code != 200:
+            return None
+
+        html = r2.text
+        def get_field(label: str) -> Optional[float]:
+            m = re.search(re.escape(label) + r"</th>\s*<td[^>]*>\s*([0-9\.,]+)", html, re.I)
+            if m:
+                try:
+                    return float(m.group(1).replace(",", ""))
+                except Exception:
+                    pass
+            return None
+
+        close_p = get_field("Last Traded Price")
+        open_p = get_field("Open")
+        high_p = get_field("High")
+        low_p = get_field("Low")
+        vol_p = get_field("Volume")
+        prev_p = get_field("Previous Close and Date")
+
+        if close_p is None or close_p <= 0:
+            return None
+
+        vol_int = int(vol_p) if vol_p is not None else 500000
+        prev_val = prev_p if (prev_p and prev_p > 0) else close_p
+        chg_abs = round(close_p - prev_val, 2)
+        chg_pct = round((chg_abs / max(prev_val, 0.01)) * 100.0, 2)
+
+        return {
+            "ticker": clean_sym,
+            "symbol": f"{clean_sym}.PS",
+            "name": match.get("cmpyNm", clean_sym),
+            "close": close_p,
+            "change_pct": chg_pct,
+            "change_abs": chg_abs,
+            "open": open_p if open_p else close_p,
+            "high": high_p if high_p else close_p,
+            "low": low_p if low_p else close_p,
+            "volume": vol_int,
+            "sector": "PSE Equities",
+            "rsi14": None,
+            "ema10": None,
+            "ema20": None,
+            "sma20": None,
+            "sma50": None,
+            "sma200": None,
+            "atr14": None,
+            "rec_all": 0.0,
+            "market_cap": None,
+            "source": "Official PSE Edge"
+        }
+    except Exception as e:
+        print(f"PSE EDGE fetch error for {clean_sym}: {e}")
+        return None
+
 def get_live_pse_quotes() -> Dict[str, Dict[str, Any]]:
     """
-    Fetches real-time market quotes and institutional technical indicators for PSE stocks
-    directly from TradingView's Philippines Scanner API. Results are cached for 60 seconds.
+    Fetches real-time market quotes and institutional technical indicators for PSE stocks.
+    Tries TradingView Philippines scanner first, and augments or falls back with Official PSE EDGE data.
+    Results are cached for 60 seconds.
     """
     now = time.time()
     if now - _TV_CACHE["timestamp"] < 60.0 and _TV_CACHE["data"]:
@@ -71,12 +158,16 @@ def get_live_pse_quotes() -> Dict[str, Dict[str, Any]]:
         "symbols": {"tickers": []},
         "columns": columns
     }
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.tradingview.com/"
+    }
 
+    res: Dict[str, Dict[str, Any]] = {}
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=8)
         if r.status_code == 200:
-            res: Dict[str, Dict[str, Any]] = {}
             for item in r.json().get("data", []):
                 sym = item.get("s", "").replace("PSE:", "")
                 d = item.get("d", [])
@@ -102,57 +193,64 @@ def get_live_pse_quotes() -> Dict[str, Dict[str, Any]]:
                     "sma200": round(float(d[15]), 2) if d[15] is not None else None,
                     "atr14": round(float(d[16]), 2) if d[16] is not None else None,
                     "rec_all": round(float(d[17]), 3) if d[17] is not None else 0.0,
-                    "market_cap": d[18] if len(d) > 18 else None
+                    "market_cap": d[18] if len(d) > 18 else None,
+                    "source": "TradingView Live Exchange"
                 }
-            if res:
-                _TV_CACHE["data"] = res
-                _TV_CACHE["timestamp"] = now
-                return res
     except Exception as e:
         print(f"TradingView live PSE fetch error: {e}")
 
-    # Fallback to catalog defaults if network error
-    if not _TV_CACHE["data"]:
-        fallback = {}
-        for ticker, meta in PSE_CATALOG.items():
-            fallback[ticker] = {
-                "ticker": ticker,
-                "symbol": f"{ticker}.PS",
-                "name": meta["name"],
-                "close": meta["base"],
-                "change_pct": 0.0,
-                "change_abs": 0.0,
-                "open": meta["base"],
-                "high": meta["base"] * 1.01,
-                "low": meta["base"] * 0.99,
-                "volume": 500000,
-                "sector": meta["sector"],
-                "rsi14": 50.0,
-                "ema10": meta["base"],
-                "ema20": meta["base"],
-                "sma20": meta["base"],
-                "sma50": meta["base"],
-                "sma200": meta["base"],
-                "atr14": round(meta["base"] * meta["volatility"], 2),
-                "rec_all": 0.0,
-                "market_cap": None
-            }
-        _TV_CACHE["data"] = fallback
+    # If TradingView succeeded with real data, cache and return
+    if res:
+        _TV_CACHE["data"] = res
         _TV_CACHE["timestamp"] = now
+        return res
 
+    # If TradingView failed or was blocked on Render, fetch directly from Official PSE EDGE!
+    print("TradingView scanner unavailable. Fetching quotes directly from official PSE EDGE...")
+    for ticker in PSE_CATALOG.keys():
+        edge_stock = fetch_pse_edge_stock(ticker)
+        if edge_stock and edge_stock.get("close", 0) > 0:
+            res[ticker] = edge_stock
+
+    if res:
+        _TV_CACHE["data"] = res
+        _TV_CACHE["timestamp"] = now
+        return res
+
+    # Emergency fallback to catalog defaults only if both network sources fail
+    fallback = {}
+    for ticker, meta in PSE_CATALOG.items():
+        fallback[ticker] = {
+            "ticker": ticker,
+            "symbol": f"{ticker}.PS",
+            "name": meta["name"],
+            "close": meta["base"],
+            "change_pct": 0.0,
+            "change_abs": 0.0,
+            "open": meta["base"],
+            "high": meta["base"] * 1.01,
+            "low": meta["base"] * 0.99,
+            "volume": 500000,
+            "sector": meta["sector"],
+            "rsi14": 50.0,
+            "ema10": meta["base"],
+            "ema20": meta["base"],
+            "sma20": meta["base"],
+            "sma50": meta["base"],
+            "sma200": meta["base"],
+            "atr14": round(meta["base"] * meta["volatility"], 2),
+            "rec_all": 0.0,
+            "market_cap": None,
+            "source": "Catalog Baseline"
+        }
+    _TV_CACHE["data"] = fallback
+    _TV_CACHE["timestamp"] = now
     return _TV_CACHE["data"]
 
 class AdvisorRequest(BaseModel):
     budget: float = 25000.0
     risk_profile: str = "balanced"  # "conservative", "balanced", "aggressive"
     horizon: str = "short"  # "short", "medium", "long"
-
-def clean_symbol(ticker: str) -> str:
-    """Normalize input to clean ticker (e.g. 'ali' -> 'ALI')."""
-    s = ticker.strip().upper()
-    if s.endswith(".PS"):
-        s = s[:-3]
-    return s
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Computes 9-day EMA, 21-day EMA, 14-day RSI, and 14-day ATR."""
@@ -251,14 +349,21 @@ def generate_pse_historical_data(symbol: str, days: int = 60, live_quote: Option
     return df
 
 def fetch_pse_data(symbol: str, days: int = 60) -> tuple[pd.DataFrame, str]:
-    """Fetches real-time TradingView live exchange rates and anchored time-series."""
+    """Fetches real-time market exchange rates and anchored time-series."""
     clean_sym = clean_symbol(symbol)
     quotes = get_live_pse_quotes()
     live = quotes.get(clean_sym)
 
+    if not live or live.get("close", 0) <= 0:
+        edge_data = fetch_pse_edge_stock(clean_sym)
+        if edge_data and edge_data.get("close", 0) > 0:
+            live = edge_data
+            quotes[clean_sym] = edge_data
+
     if live and live.get("close", 0) > 0:
         df = generate_pse_historical_data(clean_sym, days=days, live_quote=live)
-        return df, "TradingView Live Exchange"
+        src = live.get("source", "TradingView Live Exchange")
+        return df, src
 
     df = generate_pse_historical_data(clean_sym, days=days)
     return df, "PSE Historical Engine"
@@ -411,8 +516,8 @@ def get_market_grid():
     stocks = []
     for ticker, meta in PSE_CATALOG.items():
         try:
-            live = quotes.get(ticker)
             raw_df, source = fetch_pse_data(ticker, days=45)
+            live = quotes.get(ticker)
             df = calculate_technical_indicators(raw_df)
             forecast = evaluate_next_day_forecast(df)
 
