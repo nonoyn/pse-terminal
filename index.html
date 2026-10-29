@@ -382,44 +382,38 @@
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-orange-500/30"></span> <strong>Forecast Projection (Dashed Orange)</strong></span>
           </div>
 
-          <!-- Timeframe & Range Selector (1M, 3M, 6M, 12M) -->
+          <!-- Timeframe & Range Selector (1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y + Dropdown) -->
           <div class="flex items-center gap-2 self-start lg:self-auto flex-wrap">
-            <span class="text-[11px] font-mono text-gray-400 flex items-center gap-1"><i class="fa-regular fa-calendar-days text-gray-500"></i> Timeframe:</span>
-            <div class="inline-flex rounded-lg bg-gray-950 p-1 border border-gray-800 font-mono text-xs shadow-inner">
-              <button 
-                id="tfBtn-1M" 
-                onclick="changeTimeframe('1M')" 
-                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
-                title="1 Month (22 Trading Days)"
-              >
-                1M
-              </button>
-              <button 
-                id="tfBtn-3M" 
-                onclick="changeTimeframe('3M')" 
-                class="px-2.5 py-1 rounded bg-blue-600 text-white font-bold shadow-sm transition-all"
-                title="3 Months (65 Trading Days)"
-              >
-                3M
-              </button>
-              <button 
-                id="tfBtn-6M" 
-                onclick="changeTimeframe('6M')" 
-                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
-                title="6 Months (130 Trading Days)"
-              >
-                6M
-              </button>
-              <button 
-                id="tfBtn-12M" 
-                onclick="changeTimeframe('12M')" 
-                class="px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold"
-                title="12 Months / 1 Year (252 Trading Days)"
-              >
-                12M
-              </button>
+            <span class="text-[11px] font-mono text-gray-400 flex items-center gap-1"><i class="fa-regular fa-calendar-days text-blue-400"></i> Period:</span>
+            
+            <!-- Quick Pills (Desktop/Tablet) -->
+            <div class="hidden sm:inline-flex rounded-lg bg-gray-950 p-1 border border-gray-800 font-mono text-xs shadow-inner">
+              <button id="tfBtn-1M" onclick="changeTimeframe('1M')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="1 Month (22 Trading Days)">1M</button>
+              <button id="tfBtn-3M" onclick="changeTimeframe('3M')" class="px-2 py-0.5 rounded bg-blue-600 text-white font-bold shadow-sm transition-all" title="3 Months (65 Trading Days)">3M</button>
+              <button id="tfBtn-6M" onclick="changeTimeframe('6M')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="6 Months (130 Trading Days)">6M</button>
+              <button id="tfBtn-1Y" onclick="changeTimeframe('1Y')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="1 Year (252 Trading Days)">1Y</button>
+              <button id="tfBtn-2Y" onclick="changeTimeframe('2Y')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="2 Years (504 Trading Days)">2Y</button>
+              <button id="tfBtn-3Y" onclick="changeTimeframe('3Y')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="3 Years (756 Trading Days)">3Y</button>
+              <button id="tfBtn-5Y" onclick="changeTimeframe('5Y')" class="px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold" title="5 Years (1,260 Trading Days)">5Y</button>
             </div>
-            <span id="chartRangeSubtitle" class="font-mono text-[11px] text-gray-400 bg-gray-800/80 px-2 py-0.5 rounded border border-gray-700/60 hidden sm:inline">Trailing 3 Months</span>
+
+            <!-- Dropdown Selector (Compact & Touch-Friendly) -->
+            <select 
+              id="timeframeSelect" 
+              onchange="changeTimeframe(this.value)"
+              class="bg-gray-950 border border-gray-700 hover:border-blue-500/60 focus:border-blue-500 text-white rounded-lg px-2.5 py-1 text-xs font-mono font-semibold focus:outline-none transition-all cursor-pointer shadow-inner"
+              title="Select Chart Horizon"
+            >
+              <option value="1M">1 Month (22 Days)</option>
+              <option value="3M" selected>3 Months (65 Days)</option>
+              <option value="6M">6 Months (130 Days)</option>
+              <option value="1Y">1 Year (252 Days)</option>
+              <option value="2Y">2 Years (504 Days)</option>
+              <option value="3Y">3 Years (756 Days)</option>
+              <option value="5Y">5 Years (1,260 Days)</option>
+            </select>
+
+            <span id="chartRangeSubtitle" class="font-mono text-[11px] text-gray-400 bg-gray-800/80 px-2 py-0.5 rounded border border-gray-700/60 hidden xl:inline">Trailing 3 Months</span>
           </div>
         </div>
 
@@ -715,35 +709,46 @@
     let currentSortCol = 'latest_close';
     let currentSortAsc = false;
 
-    // Timeframe Configuration (1M, 3M, 6M, 12M)
+    // Timeframe Configuration (1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y)
     let currentTimeframe = '3M';
     const TIMEFRAME_CONFIG = {
       '1M': { days: 22, label: 'Trailing 1 Month (22 Trading Days)' },
       '3M': { days: 65, label: 'Trailing 3 Months (65 Trading Days)' },
       '6M': { days: 130, label: 'Trailing 6 Months (130 Trading Days)' },
-      '12M': { days: 252, label: 'Trailing 12 Months (252 Trading Days)' }
+      '1Y': { days: 252, label: 'Trailing 1 Year (252 Trading Days)' },
+      '12M': { days: 252, label: 'Trailing 1 Year (252 Trading Days)' },
+      '2Y': { days: 504, label: 'Trailing 2 Years (504 Trading Days)' },
+      '3Y': { days: 756, label: 'Trailing 3 Years (756 Trading Days)' },
+      '5Y': { days: 1260, label: 'Trailing 5 Years (1,260 Trading Days)' }
     };
 
     function changeTimeframe(tf) {
-      if (!TIMEFRAME_CONFIG[tf]) return;
-      currentTimeframe = tf;
+      const normalizedTf = tf === '12M' ? '1Y' : tf;
+      if (!TIMEFRAME_CONFIG[normalizedTf]) return;
+      currentTimeframe = normalizedTf;
 
-      // Update button styling
-      ['1M', '3M', '6M', '12M'].forEach(k => {
+      // Update pill button styling
+      ['1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y'].forEach(k => {
         const b = document.getElementById(`tfBtn-${k}`);
         if (!b) return;
-        if (k === tf) {
-          b.className = 'px-2.5 py-1 rounded bg-blue-600 text-white font-bold shadow-sm transition-all';
+        if (k === normalizedTf) {
+          b.className = 'px-2 py-0.5 rounded bg-blue-600 text-white font-bold shadow-sm transition-all';
         } else {
-          b.className = 'px-2.5 py-1 rounded text-gray-400 hover:text-white transition-all font-semibold';
+          b.className = 'px-2 py-0.5 rounded text-gray-400 hover:text-white transition-all font-semibold';
         }
       });
 
+      // Synchronize dropdown value
+      const select = document.getElementById('timeframeSelect');
+      if (select && select.value !== normalizedTf) {
+        select.value = normalizedTf;
+      }
+
       const sub = document.getElementById('chartRangeSubtitle');
-      if (sub) sub.textContent = TIMEFRAME_CONFIG[tf].label;
+      if (sub) sub.textContent = TIMEFRAME_CONFIG[normalizedTf].label;
 
       const tblSub = document.getElementById('tableRangeSubtitle');
-      if (tblSub) tblSub.textContent = `Forecast Row + ${TIMEFRAME_CONFIG[tf].label}`;
+      if (tblSub) tblSub.textContent = `Forecast Row + ${TIMEFRAME_CONFIG[normalizedTf].label}`;
 
       loadStock(currentTicker);
     }
@@ -1095,12 +1100,12 @@
           label: 'Historical Close (₱)',
           data: historicalSeries,
           borderColor: '#3b82f6',
-          borderWidth: 2.5,
+          borderWidth: (currentTimeframe === '3Y' || currentTimeframe === '5Y') ? 1.8 : 2.5,
           backgroundColor: gradient,
           fill: true,
           tension: 0.15,
           pointRadius: (ctx) => {
-            if (currentTimeframe === '12M') return 0;
+            if (['1Y', '12M', '2Y', '3Y', '5Y'].includes(currentTimeframe)) return 0;
             if (currentTimeframe === '6M') return 0.8;
             return 1.8;
           },
@@ -1219,7 +1224,7 @@
               ticks: { 
                 color: '#9ca3af', 
                 font: { family: 'JetBrains Mono', size: 10 }, 
-                maxTicksLimit: currentTimeframe === '12M' ? 14 : (currentTimeframe === '6M' ? 12 : 8) 
+                maxTicksLimit: ['2Y', '3Y', '5Y'].includes(currentTimeframe) ? 14 : (['1Y', '12M'].includes(currentTimeframe) ? 12 : (currentTimeframe === '6M' ? 10 : 8)) 
               }
             },
             y: {

@@ -306,13 +306,18 @@ def generate_pse_historical_data(symbol: str, days: int = 60, live_quote: Option
         base_price = meta["base"]
         vol = meta["volatility"]
 
-    drift = rng.uniform(-0.001, 0.002)
+    drift = rng.uniform(-0.0005, 0.001)
     daily_returns = rng.normal(drift, vol, days)
 
     # Generate prices backwards so the last candle exactly equals base_price
     prices = [base_price]
     for ret in reversed(daily_returns[1:]):
-        prev_p = max(prices[-1] / (1.0 + ret), 0.10)
+        curr_p = prices[-1]
+        reversion = 0.0012 * (base_price - curr_p) / base_price if days > 252 else 0.0
+        adjusted_ret = ret + reversion
+        prev_p = max(curr_p / (1.0 + adjusted_ret), 0.10)
+        # Keep realistic bounds between 25% and 350% of base price
+        prev_p = min(max(prev_p, base_price * 0.25), base_price * 3.5)
         prices.append(prev_p)
     prices.reverse()
 
@@ -766,10 +771,10 @@ def get_ai_advisor(payload: AdvisorRequest = Body(...)):
     }
 
 @app.get("/api/stock/{ticker}")
-def get_stock_data(ticker: str, days: int = Query(65, ge=15, le=370)):
+def get_stock_data(ticker: str, days: int = Query(65, ge=15, le=1500)):
     """
     Main PSE endpoint:
-    - Fetches 15 to 370 trading days of OHLCV data (1M, 3M, 6M, 12M ranges).
+    - Fetches 15 to 1,500 trading days of OHLCV data (1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y ranges).
     - Calculates 9 EMA, 21 EMA, 14 RSI, 14 ATR.
     - Computes next-day momentum forecast, confidence rating, and target corridor.
     """
